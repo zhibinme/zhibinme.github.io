@@ -1,0 +1,7 @@
+---
+layout: post
+title:  "Welcome to read my notes!"
+date:   2026-03-17 08:21:48 +0800
+categories: chaotic
+---
+Welcome to my personal [website](https://zhibin.me)!
