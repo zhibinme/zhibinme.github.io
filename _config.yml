@@ -26,11 +26,19 @@ baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://zhibin.me" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: 
 github_username:  zhibinme
+show_excerpts: true
+excerpt_separator: <!--more-->
 
 # Build settings
-theme: minima
+# theme: minima
 plugins:
   - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-tailwind
+
+tailwind:
+  input: assets/css/app.css    # 输入文件路径
+  minify: true                 # 生产环境启用压缩
 
 # Exclude from processing.
 # The following items will not be processed, by default.

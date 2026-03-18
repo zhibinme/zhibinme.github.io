@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* 自定义主题配置 - 使用 @theme 指令 */
+@theme {
+  /* 自定义字体 */
+  --font-serif: "Georgia", "Noto Serif SC", serif;
+  --font-display: "Inter", "system-ui", sans-serif;
+  
+  /* 自定义断点 */
+  --breakpoint-sm: 400px;
+  --breakpoint-md: 600px;
+  --breakpoint-lg: 800px;
+  
+  /* 自定义颜色 */
+  --color-brand-primary: #1c64f2;
+  --color-brand-secondary: #7e3af2;
+  --color-custom-gray: #3a3a3a;
+  
+  /* 自定义间距 */
+  /* --spacing-128: 32rem; */
+}
+
+@import "./syntax.css";
+.highlight {
+  @apply rounded-sm;
+  
+  .highlight {
+    @apply p-2 overflow-x-scroll;
+  }
+}

@@ -1,0 +1,27 @@
+---
+layout: default
+---
+<article class="leading-relaxed xl:leading-loose" itemscope itemtype="http://schema.org/BlogPosting">
+  <header class="mb-2 md:mb-4 xl:mb-6">
+    <h1 itemprop="name headline" class="text-4xl">{{ page.title | escape }}</h1>
+    <p class="mt-2 text-sm text-gray-500">
+      {%- assign date_format = site.date_format | default: "%b %-d, %Y" -%}
+      <time datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
+        {{ page.date | date: date_format }}
+      </time>
+      {%- if page.updated_at -%}
+        • <time datetime="{{ page.updated_at | date_to_xmlschema }}" itemprop="datePublished">
+            {{ page.updated_at | date: date_format }}
+          </time>
+      {%- endif -%}
+      {%- if page.author -%}
+        • <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span itemprop="name">{{ page.author }}</span></span>
+      {%- endif -%}</p>
+  </header>
+
+  <div itemprop="articleBody">
+    {{ content }}
+  </div>
+
+  <a href="{{ page.url | relative_url }}" hidden></a>
+</article>
