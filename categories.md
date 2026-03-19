@@ -3,7 +3,7 @@ layout: page
 title: Categories
 permalink: /categories/
 ---
-<ul class="space-y-2 md:space-y-4 xl:space-y-6">
+<ul class="space-y-2 md:space-y-4 xl:space-y-6 capitalize">
   {% for category in site.categories %}
     {% assign category_name = category[0] %}
     {% assign category_posts = category[1] %}
