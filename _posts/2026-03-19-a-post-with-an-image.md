@@ -7,7 +7,7 @@ categories: chaotic
 This is an example post that features an image.
 
 
-![Casa TMolo](/assets/images/casa_tmolo.png)
+![Casa TMolo](/assets/images/casa_tmolo.jpg)
 
 <!-- more -->
 
