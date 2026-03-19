@@ -27,7 +27,7 @@ url: "https://zhibin.me" # the base hostname & protocol for your site, e.g. http
 twitter_username: 
 github_username:  zhibinme
 show_excerpts: true
-excerpt_separator: <!--more-->
+excerpt_separator: <!-- more -->
 
 # Build settings
 # theme: minima
