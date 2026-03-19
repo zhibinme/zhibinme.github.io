@@ -1,14 +1,8 @@
 ---
-layout: default  # 继承你的主布局
+layout: default
 ---
+<h1 class="text-xl font-semibold">{{ page.title }}</h1>
 
-<div>
-  <h1 class="mb-2 md:mb-4 xl:mb-6 text-lg font-bold">{{ page.title }}</h1>
-  <p class="text-gray-600 mb-2 md:mb-4 xl:mb-6">
-    共有 {{ page.posts.size }} 篇文章
-  </p>
-
-  {%- if page.posts.size > 0 -%}
-    {%- include ariticle-list.html posts=page.posts -%}
-  {%- endif -%}
-</div>
+{%- if page.posts.size > 0 -%}
+  {%- include ariticle-list.html posts=page.posts -%}
+{%- endif -%}

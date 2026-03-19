@@ -20,6 +20,48 @@
   /* --spacing-128: 32rem; */
 }
 
+/* 正文样式 */
+.article-content {
+  @apply leading-relaxed xl:leading-loose space-y-2 md:space-y-4 xl:space-y-6;
+
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold;
+  }
+
+  blockquote { 
+    @apply text-gray-500 px-4 py-2 rounded-md border-l-4 border-gray-300 bg-gray-50;
+  }
+  code {
+    @apply text-sm font-mono px-2 py-1 bg-gray-200 rounded-md;
+  }
+
+  pre { 
+    code {
+      @apply text-inherit p-0 bg-inherit rounded-none;
+    }
+  }
+
+  hr {
+    @apply border-t border-gray-200;
+  }
+
+  table {
+    @apply w-full leading-tight;
+
+    th {
+      @apply px-4 py-2 border-b border-gray-200;
+    }
+    td {
+      @apply px-4 py-2 border-b border-gray-200;
+    }
+  }
+}
+
+/* 语法高亮 */
 @import "./syntax.css";
 .highlight {
   @apply rounded-sm;

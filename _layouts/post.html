@@ -1,38 +1,39 @@
 ---
 layout: default
 ---
-<article class="leading-relaxed xl:leading-loose" itemscope itemtype="http://schema.org/BlogPosting">
-  <header class="mb-2 md:mb-4 xl:mb-6">
-    <h1 itemprop="name headline" class="text-4xl">{{ page.title | escape }}</h1>
-    <p class="mt-2 text-sm text-gray-500">
+<article class="space-y-2 md:space-y-4 xl:space-y-6" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    <span class="text-xs text-gray-500 uppercase">
       {%- assign date_format = site.date_format | default: "%b %-d, %Y" -%}
       <time datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
         {{ page.date | date: date_format }}
       </time>
-      {%- if page.updated_at -%}
-        • <time datetime="{{ page.updated_at | date_to_xmlschema }}" itemprop="datePublished">
-            {{ page.updated_at | date: date_format }}
+      {%- if page.date_modified -%}
+        • <time datetime="{{ page.date_modified | date_to_xmlschema }}" itemprop="dateModified" title="Last modified">
+            {{ page.date_modified | date: date_format }}
           </time>
       {%- endif -%}
       {%- if page.author -%}
         • <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span itemprop="name">{{ page.author }}</span></span>
-      {%- endif -%}</p>
+      {%- endif -%}
+    </span>
+    <h1 itemprop="name headline" class="text-lg font-semibold">{{ page.title | escape }}</h1>
   </header>
 
-  <div itemprop="articleBody">
+  <div itemprop="articleBody" class="article-content">
     {{ content }}
   </div>
 
-  <footer>
+  <footer class="capitalize text-sm text-gray-500 space-x-2">
     {% if page.categories.size > 0 %}
       {% for category in page.categories %}
-        <a href="/categories/{{ category | slugify }}/" class="mr-2">{{ category }}</a>
+        <a href="/categories/{{ category | slugify }}/">{{ category }}</a>
       {% endfor %}
     {% endif %}
 
     {% if page.tags.size > 0 %}
       {% for tag in page.tags %}
-        <a href="/tags/{{ tag | slugify }}/" class="mr-2">{{ tag }}</a>
+        <a href="/tags/{{ tag | slugify }}/">{{ tag }}</a>
       {% endfor %}
     {% endif %}
   </footer>

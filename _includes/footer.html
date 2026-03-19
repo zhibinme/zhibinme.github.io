@@ -1,4 +1,7 @@
-<footer>
+<footer class="mb-2 flex justify-between items-center text-gray-500 text-sm">
+  <p>
+    &copy; {{ site.time | date: "%Y" }} <a href="{{ "/" | relative_url }}">{{ site.title | escape }}</a>
+  </p>
   <data href="{{ "/" | relative_url }}"></data>
-  <p class="mt-2 md:mt-6 xl:mt-10"><a href="{{ "/feed.xml" | relative_url }}">RSS</a></p>
+  <p><a href="{{ "/feed.xml" | relative_url }}">RSS</a></p>
 </footer>
