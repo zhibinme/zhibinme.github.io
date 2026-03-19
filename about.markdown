@@ -4,4 +4,4 @@ title: About
 permalink: /about/
 ---
 
-[Zhibin](https://zhibin.me)
+Hi, I'm [Zhibin](https://zhibin.me), a software engineer from China.

@@ -1,5 +1,20 @@
 <header role="banner">
-  <div class="mt-4 md:mt-8 xl:mt-12">
+  <div class="mt-4 md:mt-8 xl:mt-12 flex items-baseline justify-between">
     <a class="text-2xl font-bold" rel="author" href="{{ "/" | relative_url }}">{{ site.title | escape }}</a>
+
+    {%- assign default_paths = site.pages | map: "path" -%}
+    {%- assign page_paths = site.header_pages | default: default_paths -%}
+    {%- if page_paths -%}
+      <nav class="flex items-center justify-between">
+        {%- for path in page_paths -%}
+          {%- assign my_page = site.pages | where: "path", path | first -%}
+          {%- if my_page.title -%}
+            {%- unless my_page.url != '/tags/' and my_page.url contains '/tags/' or my_page.url != '/categories/' and my_page.url contains '/categories/' -%}
+              <a href="{{ my_page.url | relative_url }}" class="mr-4 {% if page.url == my_page.url %}font-bold{% endif %}">{{ my_page.title | escape }}</a>
+            {%- endunless -%}
+          {%- endif -%}
+        {%- endfor -%}
+      </nav>
+    {%- endif -%}
   </div>
 </header>

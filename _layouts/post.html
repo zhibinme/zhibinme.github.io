@@ -23,5 +23,19 @@ layout: default
     {{ content }}
   </div>
 
+  <footer>
+    {% if page.categories.size > 0 %}
+      {% for category in page.categories %}
+        <a href="/categories/{{ category | slugify }}/" class="mr-2">{{ category }}</a>
+      {% endfor %}
+    {% endif %}
+
+    {% if page.tags.size > 0 %}
+      {% for tag in page.tags %}
+        <a href="/tags/{{ tag | slugify }}/" class="mr-2">{{ tag }}</a>
+      {% endfor %}
+    {% endif %}
+  </footer>
+
   <a href="{{ page.url | relative_url }}" hidden></a>
 </article>

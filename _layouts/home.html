@@ -7,30 +7,15 @@ layout: default
     <h1 class="mb-2 md:mb-4 xl:mb-6 text-lg font-bold">{{ page.title }}</h1>
   {%- endif -%}
 
-  {{ content }}
+  {%- if page.list_title -%}
+    <h2 class="mb-2 md:mb-4 xl:mb-6 text-md font-bold">{{ page.list_title }}</h2>
+  {%- endif -%}
 
   {%- if site.posts.size > 0 -%}
-    {%- if page.list_title -%}
-    <h2 class="mb-2 md:mb-4 xl:mb-6 text-md font-bold">{{ page.list_title }}</h2>
-    {%- endif -%}
-
-    <ul class="post-list space-y-2 md:space-y-6 xl:space-y-10">
-      {%- for post in site.posts -%}
-      <li class="md:relative">
-        {%- assign date_format = site.minima.date_format | default: "%b %-d, %Y" -%}
-        <span class="md:absolute md:top-px md:-translate-x-full md:-inset-s-4 uppercase text-xs text-gray-500 leading-4">{{ post.date | date: date_format }}</span>
-        <h3 class="mb-2 md:mb-3 xl:mb-4 font-semibold leading-4">
-          <a href="{{ post.url | relative_url }}">
-            {{ post.title | escape }}
-          </a>
-        </h3>
-        {%- if site.show_excerpts -%}
-          {{ post.excerpt }}
-        {%- endif -%}
-      </li>
-      {%- endfor -%}
-    </ul>
+    {%- include ariticle-list.html posts=site.posts -%}
   {%- endif -%}
+
+  {{ content }}
 
 </div>
 

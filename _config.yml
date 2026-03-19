@@ -32,13 +32,25 @@ excerpt_separator: <!--more-->
 # Build settings
 # theme: minima
 plugins:
+  - jekyll-archives
+  - jekyll-sitemap
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-tailwind
 
+# jekyll-archives 配置
+jekyll-archives:
+  enabled: [categories, tags]             # 启用分类和标签归档，可以是 categories, tags, year, month, day
+  layouts:
+    category: archive                     # 分类页使用的布局模板
+    tag: archive                          # 标签页使用的布局模板
+  permalinks:
+    category: /categories/:name/          # 分类页的 URL 路径
+    tag: /tags/:name/                     # 标签页的 URL 路径
+
 tailwind:
-  input: assets/css/app.css    # 输入文件路径
-  minify: true                 # 生产环境启用压缩
+  input: assets/css/app.css               # 输入文件路径
+  minify: true                            # 生产环境启用压缩
 
 # Exclude from processing.
 # The following items will not be processed, by default.
