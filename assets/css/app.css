@@ -65,8 +65,18 @@
 @import "./syntax.css";
 .highlight {
   @apply rounded-sm;
+
+  .err {
+    @apply bg-red-100 text-inherit;
+  }
   
   .highlight {
     @apply p-2 overflow-x-scroll;
+  }
+}
+
+.language-css {
+  .err {
+    @apply bg-transparent;
   }
 }
