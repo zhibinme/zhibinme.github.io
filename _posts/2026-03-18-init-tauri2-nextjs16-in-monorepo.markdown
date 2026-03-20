@@ -4,7 +4,7 @@ title:  "pnpm + monorepo 初始化 Tauri2 + Next.js16 项目"
 date:   2026-03-18 08:21:48 +0800
 date_modified: 2026-03-19 +0800
 categories: tutorial
-tags: [pnpm, monorepo, tauri, next.js]
+tags: [pnpm, monorepo, Tauri, Next.js]
 ---
 
 本教程逐步演示从零搭建一个 Tauri 2 桌面应用。主要通过官方工具链，以 Next.js 16 为前端，Rust 为后端，结合 `pnpm workspace` 构建一个可维护的现代化 `monorepo` 项目。教程涵盖了从环境配置、创建项目、集成 Tauri、编写前后端通信代码，到最终打包的完整流程。项目将实现一个可展示实时时间的示例应用，并通过创建共享包来实践模块化开发。
