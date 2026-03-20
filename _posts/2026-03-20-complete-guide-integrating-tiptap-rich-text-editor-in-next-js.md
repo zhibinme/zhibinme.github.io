@@ -374,7 +374,9 @@ const StarterKitEditor = () => {
 
       {/* New: BubbleMenu - appears when text is selected */}
       {editor && (
-        <BubbleMenu editor={editor} options={{ placement: 'bottom', offset: 8, flip: true }}>
+        <BubbleMenu editor={editor} options={
+          { placement: 'bottom', offset: 8, flip: true }
+          }>
           <div className="bubble-menu">
             <button onClick={() => editor.chain().focus().toggleBold().run()}
               className={editorState.isBold ? 'is-active' : ''}>Bold</button>
