@@ -11,7 +11,7 @@ date: 2026-03-20 09:09 +0800
 ---
 Tiptap is a popular headless rich text editor built on top of ProseMirror, offering rich functionality and flexible customization capabilities. This article will detail how to integrate the Tiptap editor into a Next.js project.
 
-<!-- more -->
+<!--more-->
 
 ## Step 1: Create a Next.js Project with pnpm
 

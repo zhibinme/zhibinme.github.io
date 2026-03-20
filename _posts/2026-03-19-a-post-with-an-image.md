@@ -9,7 +9,7 @@ categories: chaotic
 
 This is an example post that features an image.
 
-<!-- more -->
+<!--more-->
 
 It's a beautiful house. I like it. From the outside, the sample base materials and geometric shapes make it blend naturally into the surrounding landscape.
 
