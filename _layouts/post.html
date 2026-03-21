@@ -27,7 +27,7 @@ layout: default
   <footer class="text-sm text-gray-500 space-x-2">
     {% if page.categories.size > 0 %}
       {% for category in page.categories %}
-        <a href="/categories/{{ category | slugify }}/" class="capitalize">{{ category }}</a>
+        <a href="{{ category | category_link }}" class="capitalize">{{ category }}</a>
       {% endfor %}
     {% endif %}
 

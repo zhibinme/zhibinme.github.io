@@ -46,7 +46,7 @@ plugins:
   #   category: archive                     # 分类页使用的布局模板
   #   tag: archive                          # 标签页使用的布局模板
   # permalinks:
-  #   category: /categories/:name/          # 分类页的 URL 路径
+  #   category: /:name/                     # 分类页的 URL 路径
   #   tag: /tags/:name/                     # 标签页的 URL 路径
 
 # Tailwind CSS 配置
@@ -72,7 +72,7 @@ autopages:
     layouts:
       - 'archive.html'                    # 指定使用的布局文件
     title: '分类：:cat'
-    permalink: '/categories/:cat'         # 生成的 URL 结构
+    permalink: '/:cat/'         # 生成的 URL 结构
     slugify:
       mode: 'default'
   
@@ -82,7 +82,7 @@ autopages:
     layouts:
       - 'archive.html'
     title: '标签：:tag'
-    permalink: '/tags/:tag'
+    permalink: '/tags/:tag/'
     slugify:
       mode: 'default'
   
