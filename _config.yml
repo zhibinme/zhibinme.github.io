@@ -90,6 +90,9 @@ autopages:
   collections:
     enabled: false                        # 按需开启
 
+baidu_tongji: 7b65e19bddcb7ef042697a320b46600e
+google_analytics: true
+
 # Exclude from processing.
 # The following items will not be processed, by default.
 # Any item listed under the `exclude:` key here will be automatically added to
