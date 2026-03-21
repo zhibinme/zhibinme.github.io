@@ -49,6 +49,10 @@ plugins:
   #   category: /:name/                     # 分类页的 URL 路径
   #   tag: /tags/:name/                     # 标签页的 URL 路径
 
+# permalinks:
+# category_base_path: '/categories'
+permalink: none
+
 # Tailwind CSS 配置
 tailwind:
   input: assets/css/app.css               # 输入文件路径
