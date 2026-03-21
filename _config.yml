@@ -37,20 +37,58 @@ plugins:
   - jekyll-feed
   - jekyll-seo-tag
   - jekyll-tailwind
+  - jekyll-paginate-v2
 
 # jekyll-archives 配置
-jekyll-archives:
-  enabled: [categories, tags]             # 启用分类和标签归档，可以是 categories, tags, year, month, day
-  layouts:
-    category: archive                     # 分类页使用的布局模板
-    tag: archive                          # 标签页使用的布局模板
-  permalinks:
-    category: /categories/:name/          # 分类页的 URL 路径
-    tag: /tags/:name/                     # 标签页的 URL 路径
+# jekyll-archives:
+  # enabled: [categories, tags]             # 启用分类和标签归档，可以是 categories, tags, year, month, day
+  # layouts:
+  #   category: archive                     # 分类页使用的布局模板
+  #   tag: archive                          # 标签页使用的布局模板
+  # permalinks:
+  #   category: /categories/:name/          # 分类页的 URL 路径
+  #   tag: /tags/:name/                     # 标签页的 URL 路径
 
+# Tailwind CSS 配置
 tailwind:
   input: assets/css/app.css               # 输入文件路径
   minify: true                            # 生产环境启用压缩
+
+# 分页配置
+pagination:
+  enabled: true
+  per_page: 10                            # 每页显示 5 篇文章
+  permalink: '/page/:num/'                # 分页 URL 格式
+  title: ':title - 第 :num 页'             # 页面标题格式
+  sort_field: 'date'                      # 按日期排序
+  sort_reverse: true                      # 倒序（最新的在前）
+# AutoPages 配置 — 这是核心！
+autopages:
+  enabled: true                           # 总开关
+  
+  # 分类页面自动生成
+  categories:
+    enabled: true
+    layouts:
+      - 'archive.html'                    # 指定使用的布局文件
+    title: '分类：:cat'
+    permalink: '/categories/:cat'         # 生成的 URL 结构
+    slugify:
+      mode: 'default'
+  
+  # 标签页面自动生成
+  tags:
+    enabled: true
+    layouts:
+      - 'archive.html'
+    title: '标签：:tag'
+    permalink: '/tags/:tag'
+    slugify:
+      mode: 'default'
+  
+  # 集合页面自动生成（如果需要）
+  collections:
+    enabled: false                        # 按需开启
 
 # Exclude from processing.
 # The following items will not be processed, by default.

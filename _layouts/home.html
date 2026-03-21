@@ -1,7 +1,7 @@
 ---
 layout: default
 ---
-{%- if page.list_title or page.title -%}
+{%- if page.title_enabled and page.list_title or page.title -%}
   <header>
     {%- if page.title -%}
       <h1 class="mb-2 md:mb-4 xl:mb-6 text-xl font-semibold capitalize">{{ page.title }}</h1>
@@ -13,9 +13,22 @@ layout: default
   </header>
 {%- endif -%}
 
-{%- if site.posts.size > 0 -%}
-  {%- include ariticle-list.html posts=site.posts -%}
+{%- assign posts = paginator.posts | default: site.posts -%}
+{%- if posts.size > 0 -%}
+  {%- include ariticle-list.html posts=posts -%}
 {%- endif -%}
+
+{% if paginator %}
+  <nav class="flex justify-between text-sm text-gray-500">
+    {% if paginator.previous_page %}
+      <a href="{{ paginator.previous_page_path | relative_url }}">上一页</a>
+    {% endif %}
+    <span>第 {{ paginator.page }} / {{ paginator.total_pages }} 页</span>
+    {% if paginator.next_page %}
+      <a href="{{ paginator.next_page_path | relative_url }}">下一页</a>
+    {% endif %}
+  </nav>
+{% endif %}
 
 {{ content }}
 

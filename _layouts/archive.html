@@ -1,8 +1,21 @@
 ---
 layout: default
 ---
-<h1 class="text-xl font-semibold capitalize">{{ page.title }}</h1>
+<h1 class="text-xl font-semibold capitalize">{{ page.autopages.display_name | default: page.title }}</h1>
 
-{%- if page.posts.size > 0 -%}
-  {%- include ariticle-list.html posts=page.posts -%}
+{%- assign posts = paginator.posts | default: site.posts -%}
+{%- if posts.size > 0 -%}
+  {%- include ariticle-list.html posts=posts -%}
 {%- endif -%}
+
+ {% if paginator %}
+  <nav class="flex justify-between text-sm text-gray-500">
+    {% if paginator.previous_page %}
+      <a href="{{ paginator.previous_page_path | relative_url }}">上一页</a>
+    {% endif %}
+    <span>第 {{ paginator.page }} / {{ paginator.total_pages }} 页</span>
+    {% if paginator.next_page %}
+      <a href="{{ paginator.next_page_path | relative_url }}">下一页</a>
+    {% endif %}
+  </nav>
+  {% endif %}
