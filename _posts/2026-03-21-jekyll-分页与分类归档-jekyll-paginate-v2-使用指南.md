@@ -5,8 +5,6 @@ categories:
 - tutorial
 tags:
 - Jekyll
-- 静态博客
-- 分页
 date: 2026-03-21 16:07 +0800
 ---
 Jekyll 官方维护的 `jekyll-paginate` 早已停止更新，且不支持 `autopages`（自动生成分类/标签分页）。`jekyll-paginate-v2` 是目前更推荐的方案，支持分页和自动生成分类/标签归档页面。
