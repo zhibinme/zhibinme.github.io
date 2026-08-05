@@ -22,7 +22,7 @@ jektex 是一个 Jekyll 插件，在构建阶段把 LaTeX 编译成 KaTeX 的 DO
 
 ### 1. 在 Gemfile 添加依赖
 
-[notes/Gemfile](notes/Gemfile) 的 `:jekyll_plugins` group 里加上：
+`Gemfile` 的 `:jekyll_plugins` group 里加上：
 
 ```ruby
 group :jekyll_plugins do
@@ -40,7 +40,7 @@ bundle install
 
 ### 2. 在 _config.yml 启用插件
 
-[notes/_config.yml](notes/_config.yml) 的 `plugins:` 列表里追加：
+`_config.yml` 的 `plugins:` 列表里追加：
 
 ```yaml
 plugins:
@@ -99,14 +99,14 @@ jektex 支持两种写法，可任选其一或混用。
 
 ### 行内 vs 块级怎么选
 
-- **行内**：嵌入正文里、跟文字混排时用，比如「方程 $$ax^2 + bx + c = 0$$ 的解」
+- **行内**：嵌入正文里、跟文字混排时用，比如「方程 \(ax^2 + bx + c = 0\) 的解」
 - **块级**：公式独立成段、想要居中 + 单独一行时用
 
 ## 示例
 
 ### 基本符号
 
-欧拉恒等式 $$e^{i\pi} + 1 = 0$$ 是数学里最著名的公式之一。
+欧拉恒等式 \(e^{i\pi} + 1 = 0\) 是数学里最著名的公式之一。
 
 矩阵：
 
@@ -217,7 +217,117 @@ jektex: false
 ---
 ```
 
+## 编辑器工作流（VS Code）
+
+源文件怎么写、预览怎么显示、Jekyll 怎么渲染，三方一致才省心。下面是 VS Code 上的完整配置。
+
+### 1. 装 Markdown Preview Enhanced
+
+VS Code 默认的 Markdown 预览**不支持** `\(...\)` / `\[...\]` 这套 LaTeX 风格语法，建议装 [Markdown Preview Enhanced](https://marketplace.visualstudio.com/items?itemName=shd101wyy.markdown-preview-enhanced)（MPE），自带 KaTeX 渲染。
+
+预览命令：`Cmd + K V`（侧栏预览），或 `Cmd + Shift + P` → "Markdown Preview Enhanced: Open Preview"。
+
+### 2. 让 MPE 与 jektex 行为一致
+
+**问题**：MPE 默认按 LaTeX 约定识别数学语法 —— `$$...$$` 是块级、单 `$...$` 是行内。但 jektex / Kramdown 的约定相反 —— 单行 `$$...$$` 是行内，单 `$` 是普通文本。
+
+也就是说，你写 `$$x^2$$` 单独一行想 inline：
+
+- MPE 默认渲染成块级
+- jektex 渲染成行内
+
+两侧不一致。
+
+**推荐解法**：源文件统一用 LaTeX 风格 —— `\(...\)` 做行内、`\[...\]` 做块级。MPE 默认就识别、jektex 也原生支持，**两边都不用改任何配置**。
+
+```markdown
+欧拉恒等式 \(e^{i\pi} + 1 = 0\) 被誉为「数学中最最美的公式」。
+
+\[
+\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+\]
+```
+
+如果坚持用 `$$...$$` 当行内，需要改 MPE 配置覆盖默认（`settings.json` 里）：
+
+```json
+{
+  "markdown-preview-enhanced.math.inlineMath": [
+    ["$$", "$$"],
+    ["INLINE_OPEN", "INLINE_CLOSE"]    // 替换为反斜杠 + 圆括号
+  ],
+  "markdown-preview-enhanced.math.blockMath": [
+    ["BLOCK_OPEN", "BLOCK_CLOSE"]      // 替换为反斜杠 + 方括号
+  ]
+}
+```
+
+代价：块级公式必须写 `\[...\]`，不能用 `$$\n...\n$$` + 空行。
+
+> ⚠️ **关于示例里的占位符**：jektex 在 `pre_render` 阶段扫描**整个原始 markdown**（不区分代码块）寻找 `\(...\)` / `\[...\]` 模式。所以代码块示例里直接写反斜杠 + 括号 / 方括号会被误识别。这里用 `INLINE_OPEN` / `BLOCK_OPEN` 这类安全字符串占位，实际使用时手动替换为反斜杠 + 圆括号 / 方括号即可。
+
+### 3. 配置 markdown snippet
+
+VS Code 用户级 snippets 文件（macOS 路径）：
+
+```
+~/Library/Application Support/Code/User/snippets/markdown.json
+```
+
+写入：
+
+```json
+{
+  "KaTeX inline": {
+    "prefix": "math ",
+    "body": "INLINE_BODY",            // 替换为反斜杠 + ( + $1 + 反斜杠 + )
+    "description": "KaTeX inline math"
+  },
+  "KaTeX block": {
+    "prefix": "mathb ",
+    "body": "BLOCK_BODY",             // 替换为反斜杠 + [ + 换行 + $1 + 换行 + 反斜杠 + ]
+    "description": "KaTeX block math"
+  }
+}
+```
+
+要点：
+
+- **prefix 末尾的空格**是触发字符 —— 输入 `math ` 那一刻 IntelliSense 自动弹
+- **prefix 不能含 `(`**：VS Code 的 `editor.autoClosingBrackets` 会自动补全 `)`，snippet 展开后会有半个 `)` 残留
+- 保存后无需重启 VS Code，snippets 自动 reload；若没生效，`Cmd + Shift + P` → "Developer: Reload Window"
+
+### 4. 启用 markdown 域的自动 suggestion
+
+VS Code 默认把 markdown 正文当成 "comment" 上下文，`editor.quickSuggestions.comments` 默认是 `false` —— 即使 snippet 注册了 IntelliSense 也**不会自动弹**，只能 `Ctrl + Space` 手动触发。
+
+在 `settings.json`（用户级）加：
+
+```json
+{
+  "[markdown]": {
+    "editor.quickSuggestions": {
+      "comments": true,
+      "strings": false,
+      "other": true
+    }
+  }
+}
+```
+
+`comments: true` 是关键 —— 让 markdown 正文也算 quick suggestions 触发范围。保存后输 `math ` 停顿一下就自动弹 IntelliSense。
+
+### 5. macOS 上的额外坑
+
+`Ctrl + Space` 在 macOS 上是**切换输入法**的系统快捷键，VS Code 收不到这个按键。`Ctrl + Space` 不影响自动触发（自动触发走 quickSuggestions 通道），但如果你偏好手动触发，建议三选一：
+
+- **菜单**：`Edit` → `IntelliSense` → `Trigger Suggest`
+- **改 macOS 输入法快捷键**：`系统设置` → `键盘` → `键盘快捷键` → `输入法`，把 `⌃Space` 换成别的
+- **改 VS Code 键位**：`Cmd + K, Cmd + S` → 搜 `trigger suggest` → 改成 `Cmd + Shift + Space` 等
+
 ## 验证
+
+### Jekyll 构建
 
 跑起来后，关注启动 / 增量构建日志里的 `LaTeX: N expressions rendered (M loaded from cache)`：
 
@@ -225,7 +335,17 @@ jektex: false
 - **M 越来越大** → 缓存生效，增量构建变快
 - **没有 error** → 语法没问题
 
-浏览器里如果看到带横线的 `\sqrt{2}`、漂亮的矩阵、上下标，就说明整套链路通了。
+浏览器里如果看到带横线的 `\sqrt{2}`、漂亮的矩阵、上下标，就说明 Jekyll 链路通了。
+
+### 编辑器链路（VS Code → MPE → Jekyll）
+
+按下面顺序走一遍，确认三方一致：
+
+1. **VS Code 编辑**：在 `.md` 文件里输 `math `（math + 空格）→ 自动弹出 IntelliSense，选 `KaTeX inline math` → 光标落在 `\(cursor\)` 中间
+2. **MPE 预览**：`Cmd + K V` 打开预览 → 看到 KaTeX 行内渲染的公式（行高、间距正常）
+3. **Jekyll 构建**：`bundle exec jekyll serve --draft --livereload` → 浏览器打开草稿地址 → 跟 MPE 看到的一致
+
+任何一步不一致，回去检查对应的配置项：snippet prefix / `[markdown]` 设置 / MPE `inlineMath` / `blockMath` 覆盖。
 
 ## 参考
 
