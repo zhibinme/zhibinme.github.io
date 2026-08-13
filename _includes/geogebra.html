@@ -1,0 +1,109 @@
+<!-- _includes/geogebra.html -->
+{% assign ggb_id = include.id | default: "ggb-default" %}
+{% assign targets = include.targets | split: "," | map: "strip" %}
+
+<div id="ggb-container-{{ ggb_id }}" style="margin-bottom: 16px;"></div>
+
+<!-- 自动生成的数值显示区域 -->
+<div id="ggb-values-{{ ggb_id }}" style="display: flex; flex-wrap: wrap; gap: 16px; padding: 8px; background: #f8f9fa; border-radius: 4px; min-height: 30px;">
+  <!-- 这里会被 JavaScript 动态填充 -->
+</div>
+
+<script>
+  (function() {
+    var containerId = 'ggb-container-{{ ggb_id }}';
+    var valuesId = 'ggb-values-{{ ggb_id }}';
+    // 将传入的 targets 字符串转为数组
+    var targetNames = [{% if targets %}{{ targets | json }}{% else %}[]{% endif %}];
+
+    // 1. 定义 GeoGebra 参数
+    var params = {
+      "filename": "{{ include.file | relative_url }}",
+      "width": {{ include.width | default: 800 }},
+      "height": {{ include.height | default: 600 }},
+      "showToolBar": {{ include.showToolBar | default: true }},
+      "showAlgebraInput": {{ include.showAlgebraInput | default: false }},
+      "showMenuBar": {{ include.showMenuBar | default: false }},
+      "appletOnLoad": function(api) {
+        // 将 API 存储到全局，方便调试（非必须）
+        window['ggbApi_{{ ggb_id }}'] = api;
+        setupInteraction(api);
+      }
+    };
+
+    var applet = new GGBApplet(params, true);
+
+    // 2. 核心交互逻辑
+    function setupInteraction(api) {
+      var valuesContainer = document.getElementById(valuesId);
+      if (!valuesContainer) return;
+
+      // 如果没有指定 targets，自动获取 GeoGebra 中所有独立的点（回退方案）
+      var activeTargets = targetNames.length > 0 ? targetNames : api.getAllObjectNames ? api.getAllObjectNames().filter(name => name.length === 1 && name === name.toUpperCase()) : [];
+
+      // 如果没有找到任何目标，显示提示
+      if (activeTargets.length === 0) {
+        valuesContainer.innerHTML = '<span style="color: #6c757d;">暂无交互数据</span>';
+        return;
+      }
+
+      // 为每个目标创建显示元素
+      var displayElements = {};
+      activeTargets.forEach(function(name) {
+        var el = document.createElement('span');
+        el.id = 'val-' + containerId + '-' + name;
+        el.style.cssText = 'font-family: monospace; font-size: 14px;';
+        el.innerText = name + ': 加载中...';
+        valuesContainer.appendChild(el);
+        displayElements[name] = el;
+      });
+
+      // 定义更新函数
+      function updateAllValues() {
+        activeTargets.forEach(function(name) {
+          var el = displayElements[name];
+          if (!el) return;
+
+          try {
+            // 尝试获取坐标（适用于点 A, P 等）
+            var x = api.getXcoord(name);
+            var y = api.getYcoord(name);
+
+            if (x !== undefined && y !== undefined && !isNaN(x) && !isNaN(y)) {
+              el.innerText = name + ': (' + x.toFixed(2) + ', ' + y.toFixed(2) + ')';
+              return;
+            }
+
+            // 如果不是点，尝试获取普通数值（适用于滑块、长度等）
+            var val = api.getValue(name);
+            if (val !== undefined && !isNaN(val)) {
+              el.innerText = name + ': ' + val.toFixed(2);
+              return;
+            }
+
+            el.innerText = name + ': 无效';
+          } catch (e) {
+            // 静默处理错误
+            el.innerText = name + ': ⚠️';
+          }
+        });
+      }
+
+      // 为每个目标变量添加监听器
+      activeTargets.forEach(function(name) {
+        api.addListener(name, 'update');
+      });
+
+      // 将更新函数绑定到全局更新事件（确保 GeoGebra 能调用）
+      window['updateGgb_{{ ggb_id }}'] = updateAllValues;
+
+      // 初始化时立即更新一次
+      updateAllValues();
+    }
+
+    // 3. 注入应用
+    window.addEventListener("load", function() {
+      applet.inject(containerId);
+    });
+  })();
+</script>
