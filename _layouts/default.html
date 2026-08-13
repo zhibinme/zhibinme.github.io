@@ -15,6 +15,9 @@
       {%- include footer.html -%}
     </div>
 
+    {% if page.katex %}
+    {% include math-render.html %}
+    {% endif %}
   </body>
 
 </html>

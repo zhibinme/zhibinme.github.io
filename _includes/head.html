@@ -15,4 +15,7 @@
     {%- endif -%}
   {%- endif -%}
   <script src="https://cdn.geogebra.org/apps/deployggb.js"></script>
+  {% if page.katex %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.css">
+  {% endif %}
 </head>

@@ -1,0 +1,17 @@
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.4/dist/contrib/auto-render.min.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        renderMathInElement(document.body, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},   // 块级公式
+                {left: '$', right: '$', display: false},    // 【关键】行内公式：单美元符号
+                {left: '\\[', right: '\\]', display: true}, // jekyll 转译空行 $$ 后的块级公式：\[...\]
+                {left: '\\(', right: '\\)', display: false}, // jekyll 转译 $$ 后的行内公式：\(...\)
+                {left: '\[', right: '\]', display: true}, // 块级公式：\[...\]
+                {left: '\(', right: '\)', display: false}, // 行内公式：\(...\)
+            ]
+        });
+    });
+</script>
