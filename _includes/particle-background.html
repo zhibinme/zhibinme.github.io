@@ -1,0 +1,512 @@
+<!--
+  真实极光物理特征复刻：
+
+    1. 垂直幕帘（curtain）：从顶部垂下的光带，底部尖、顶部淡
+    2. 底部波形起伏：多频正弦叠加（模拟磁力线波动）
+    3. 垂直 ray 条纹：沿幕帘向下流动的亮线（粒子流）
+    4. 多幕帘并行：3-5 条不同色相/相位，水平慢漂
+    5. CSS blur：整层高斯模糊，制造光晕
+
+  层次（自底向上）：
+    .pb-base         → 顶部浅蓝渐变（容器底色）
+    #pb-aurora       → 极光幕帘（blur 模糊、multiply 混合）
+    #pb-canvas       → 弹性网格圆点（鼠标水波）
+    #pb-mouse-blob   → 鼠标光斑（blur + multiply）
+    .pb-fade         → 顶部 mask 融入正文
+-->
+<div class="pb-wrap" aria-hidden="true">
+  <!-- 层 2：极光（垂直幕帘 + blur + multiply） -->
+  <canvas id="pb-aurora" class="pb-layer pb-blur"></canvas>
+
+  <!-- 层 3：弹性网格（圆点 + 鼠标水波） -->
+  <canvas id="pb-canvas" class="pb-layer"></canvas>
+
+  <!-- 层 4：鼠标跟随光斑（blur + multiply） -->
+  <canvas id="pb-mouse-blob" class="pb-layer pb-blur pb-blend"></canvas>
+
+  <!-- 层 5：顶部 mask -->
+  <div class="pb-fade"></div>
+</div>
+
+<style>
+  .pb-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    /* 容器底色：顶部浅蓝向下淡出 */
+    background: linear-gradient(180deg, #9cc1e7 0%, rgba(250, 250, 250, 0) 100%);
+  }
+
+  .pb-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 整层高斯模糊 —— GPU 加速，给极光/光斑做真正的"光晕" */
+  .pb-blur { filter: blur(28px); }
+  /* 鼠标波浪更小，blur 也小一点 —— 保留形状可读性 */
+  #pb-mouse-blob { filter: blur(78px); }
+
+  /* 深色在浅底自然显形 */
+  .pb-blend { mix-blend-mode: multiply; }
+
+  /* 顶部 mask 渐隐 */
+  .pb-fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, transparent 92%, rgba(255,255,255,0.6) 100%);
+  }
+</style>
+
+<script>
+(function () {
+  if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
+  var wrap = document.querySelector('.pb-wrap');
+  if (!wrap) return;
+
+  var DPR_CAP = 2;
+  var dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+  var W = 0, H = 0;
+  var mouse = { x: NaN, y: NaN, lx: NaN, ly: NaN };
+  // 鼠标速度（平滑后）—— 用于波浪方向旋转 + 极光扰动
+  var prevMouse = { x: 0, y: 0, has: false };
+  var mouseVel = { x: 0, y: 0 };
+  var visible = true;
+
+  function setCanvas(canvas) {
+    W = canvas.clientWidth;
+    H = canvas.clientHeight;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return ctx;
+  }
+
+  // ========================================================
+  // 层 2：极光幕帘（垂直 curtain + ray streaks）
+  // 物理映射：
+  //   - 垂直幕帘  ←  太阳风粒子沿磁力线下落
+  //   - 底部亮/顶淡  ←  大气密度差异：底部稠密碰撞多、顶部稀薄扩散
+  //   - 水平慢漂  ←  地磁活动变化
+  //   - 底部多频正弦  ←  磁力线波动（多个本征模叠加）
+  //   - 垂直 ray 条纹  ←  粒子流轨迹
+  // ========================================================
+  (function () {
+    var canvas = document.getElementById('pb-aurora');
+    if (!canvas) return;
+    var ctx = setCanvas(canvas);
+
+    // 5 条幕帘（不同 x、色相、相位、漂移方向）
+    var curtains = [
+      { x: 0.12, hue: 195, sat: 70, light: 55, alpha: 0.55, drift: 0.018, phase: 0.0 },
+      { x: 0.30, hue: 200, sat: 65, light: 52, alpha: 0.65, drift: -0.022, phase: 1.7 },
+      { x: 0.50, hue: 205, sat: 70, light: 50, alpha: 0.70, drift: 0.025, phase: 3.4 },
+      { x: 0.70, hue: 210, sat: 65, light: 52, alpha: 0.60, drift: -0.020, phase: 5.1 },
+      { x: 0.88, hue: 200, sat: 70, light: 55, alpha: 0.50, drift: 0.023, phase: 6.8 }
+    ];
+
+    // 绘制单条幕帘
+    // c: curtain 配置
+    // sec: 当前秒数
+    // baseY: 幕帘底部 y 坐标（0..1 of H）
+    // topY:  幕帘顶部 y 坐标（0..1 of H）
+    function drawCurtain(c, sec, baseY, topY) {
+      var cx = (c.x + Math.sin(sec * c.drift + c.phase) * 0.04) * W;
+      var baseYPx = baseY * H;
+      var topYPx = topY * H;
+      var segs = 80;
+      var halfWidth = W * 0.10; // 幕帘半宽（左右对称铺开）
+
+      // === 鼠标扰动（disturbance）===
+      // 鼠标附近幕帘的振幅 + 亮度都被放大
+      // 注意：mouse.lx 初始为 NaN，要守卫否则 NaN 传染整条路径 → 首帧不渲染
+      var mouseSpeed = 0, distToMouse = 1e9;             // 默认：无鼠标 → 扰动 = 0
+      if (!isNaN(mouse.lx)) {
+        mouseSpeed = Math.sqrt(mouseVel.x * mouseVel.x + mouseVel.y * mouseVel.y);
+        var dxM = cx - mouse.lx, dyM = baseYPx - mouse.ly;
+        distToMouse = Math.sqrt(dxM * dxM + dyM * dyM);
+      }
+      var falloff = Math.max(0, 1 - distToMouse / 450);  // 450px 影响半径
+      var speedNorm = Math.min(1, mouseSpeed / 25);       // 速度归一化
+      var disturb = falloff * speedNorm;                  // 0~1
+      var ampBoost = 1 + disturb * 1.8;                   // 振幅最多 ~2.8x
+      var alphaBoost = 1 + disturb * 0.6;                 // 亮度最多 1.6x
+
+      // 构造幕帘路径：从左下 → 顶部（多频正弦起伏）→ 右下
+      ctx.beginPath();
+      ctx.moveTo(cx - halfWidth, baseYPx + 20);
+      // 沿底部向上绘制（多频正弦 = 磁力线波动）
+      for (var i = 0; i <= segs; i++) {
+        var t = i / segs;
+        var y = baseYPx + (topYPx - baseYPx) * t;
+        // 多频正弦：3 个频率叠加 → 自然的"波动"
+        var wave = Math.sin(sec * 0.4 + t * 5 + c.phase) * 22
+                 + Math.sin(sec * 0.6 + t * 11 + c.phase * 1.3) * 10
+                 + Math.sin(sec * 0.3 + t * 2.5 + c.phase * 0.7) * 18;
+        // 顶部衰减振幅（太空里波动减弱）
+        var ampFalloff = 1 - t * 0.5;
+        // 鼠标扰动 → 振幅局部暴涨
+        var xPos = cx + wave * ampFalloff * ampBoost;
+        // 宽度也向顶部收窄（光束扩散）
+        var xOff = halfWidth * (1 - t * 0.4);
+        // 绘制幕帘左缘
+        if (i === 0) ctx.moveTo(xPos - xOff, y);
+        else ctx.lineTo(xPos - xOff, y);
+      }
+      // 幕帘右缘（反向）
+      for (var j = segs; j >= 0; j--) {
+        var t2 = j / segs;
+        var y2 = baseYPx + (topYPx - baseYPx) * t2;
+        var wave2 = Math.sin(sec * 0.4 + t2 * 5 + c.phase) * 22
+                  + Math.sin(sec * 0.6 + t2 * 11 + c.phase * 1.3) * 10
+                  + Math.sin(sec * 0.3 + t2 * 2.5 + c.phase * 0.7) * 18;
+        var ampFalloff2 = 1 - t2 * 0.5;
+        var xPos2 = cx + wave2 * ampFalloff2 * ampBoost;
+        var xOff2 = halfWidth * (1 - t2 * 0.4);
+        ctx.lineTo(xPos2 + xOff2, y2);
+      }
+      ctx.closePath();
+
+      // 垂直渐变：顶部透明（太空扩散）→ 中部亮（碰撞峰值）→ 底部略淡
+      var g = ctx.createLinearGradient(0, topYPx, 0, baseYPx);
+      var aMul = c.alpha * alphaBoost;
+      g.addColorStop(0,    'hsla(' + c.hue + ',' + c.sat + '%,' + c.light + '%,0)');
+      g.addColorStop(0.25, 'hsla(' + c.hue + ',' + c.sat + '%,' + c.light + '%,' + (aMul * 0.45) + ')');
+      g.addColorStop(0.65, 'hsla(' + c.hue + ',' + c.sat + '%,' + (c.light + 8) + '%,' + aMul + ')');
+      g.addColorStop(0.90, 'hsla(' + c.hue + ',' + c.sat + '%,' + (c.light + 12) + '%,' + (aMul * 0.7) + ')');
+      g.addColorStop(1,    'hsla(' + c.hue + ',' + c.sat + '%,' + c.light + '%,0)');
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      // 垂直 ray 条纹（粒子流轨迹）：3-5 条细亮线，沿幕帘向下流动
+      var rays = 5;
+      for (var r = 0; r < rays; r++) {
+        var rx = cx + (r / (rays - 1) - 0.5) * halfWidth * 1.4
+                       + Math.sin(sec * 0.5 + r * 1.3 + c.phase) * 15;
+        // ray 在底部附近最亮，向顶部淡出
+        var rayGrad = ctx.createLinearGradient(rx, topYPx, rx, baseYPx);
+        rayGrad.addColorStop(0,   'hsla(' + c.hue + ',' + c.sat + '%,80%,0)');
+        rayGrad.addColorStop(0.5, 'hsla(' + c.hue + ',' + c.sat + '%,80%,' + (aMul * 0.3) + ')');
+        rayGrad.addColorStop(1,   'hsla(' + c.hue + ',' + c.sat + '%,85%,' + (aMul * 0.5) + ')');
+        ctx.fillStyle = rayGrad;
+        ctx.fillRect(rx - 0.5, topYPx, 1, baseYPx - topYPx);
+      }
+    }
+
+    var lastFrame = 0, interval = 1000 / 30; // 30fps 节流
+    function loop(now) {
+      requestAnimationFrame(loop);
+      if (!visible) return;
+      if (now - lastFrame < interval) return;
+      lastFrame = now - ((now - lastFrame) % interval);
+
+      ctx.clearRect(0, 0, W, H);
+      var sec = lastFrame / 1000;
+      // 绘制所有幕帘 —— 底部约在 H*0.55，顶部约在 H*0.05（占上 50% 屏幕）
+      for (var i = 0; i < curtains.length; i++) {
+        drawCurtain(curtains[i], sec, 0.55, 0.05);
+      }
+    }
+
+    var io = new IntersectionObserver(function (es) {
+      visible = es[0].isIntersecting;
+      if (visible) lastFrame = 0;
+    }, { threshold: 0 });
+    io.observe(canvas);
+    window.addEventListener('resize', function () { setCanvas(canvas); });
+    requestAnimationFrame(loop);
+  })();
+
+  // ========================================================
+  // 层 3：弹性网格（圆点 + 鼠标水波）—— 与 home 浅色版一致
+  // ========================================================
+  (function () {
+    var canvas = document.getElementById('pb-canvas');
+    if (!canvas) return;
+    var ctx = setCanvas(canvas);
+
+    var CELL = 90, MOUSE_RADIUS = 140, SPRING = 0.05, DAMP = 0.85, PUSH = 0.30;
+    var DOT_BASE = 1.8, DOT_GROW = 2.0, LINE_PAD = 10, LINE_DIST = 20;
+    var FPS = 30;
+    var LINE_RGB = '255, 250, 250', DOT_RGB = '250, 250, 250';
+    var LINE_ALPHA = 0.10, DOT_ALPHA = 0.22;
+
+    var cols = 0, rows = 0, ox = 0, oy = 0;
+    var nodes = [];
+    var lastFrame = 0, frameInterval = 1000 / FPS;
+
+    function buildGrid() {
+      cols = Math.ceil(W / CELL) + 1;
+      rows = Math.ceil(H / CELL) + 1;
+      ox = (W - (cols - 1) * CELL) / 2;
+      oy = (H - (rows - 1) * CELL) / 2;
+      nodes = [];
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          var rx = ox + c * CELL, ry = oy + r * CELL;
+          nodes.push({ rx: rx, ry: ry, x: rx, y: ry, vx: 0, vy: 0 });
+        }
+      }
+    }
+    function resize() { setCanvas(canvas); buildGrid(); }
+
+    function step(ts) {
+      requestAnimationFrame(step);
+      if (!visible) return;
+      if (ts - lastFrame < frameInterval) return;
+      lastFrame = ts - ((ts - lastFrame) % frameInterval);
+
+      var i, n, dx, dy, dist, force, ang, l, k, a, b;
+      var maxMotion = 0;
+
+      for (i = 0; i < nodes.length; i++) {
+        n = nodes[i];
+        dx = n.x - mouse.lx; dy = n.y - mouse.ly;
+        dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < MOUSE_RADIUS && dist > 0.1) {
+          force = (1 - dist / MOUSE_RADIUS);
+          ang = Math.atan2(dy, dx);
+          n.vx += Math.cos(ang) * force * PUSH;
+          n.vy += Math.sin(ang) * force * PUSH;
+        }
+        n.vx += (n.rx - n.x) * SPRING;
+        n.vy += (n.ry - n.y) * SPRING;
+        n.vx *= DAMP; n.vy *= DAMP;
+        n.x += n.vx; n.y += n.vy;
+        k = Math.abs(n.vx) + Math.abs(n.vy);
+        if (k > maxMotion) maxMotion = k;
+      }
+
+      ctx.clearRect(0, 0, W, H);
+
+      // 横线
+      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = 'rgba(' + LINE_RGB + ',' + LINE_ALPHA + ')';
+      for (var r2 = 0; r2 < rows; r2++) {
+        for (var c2 = 0; c2 < cols - 1; c2++) {
+          a = nodes[r2 * cols + c2];
+          b = nodes[r2 * cols + c2 + 1];
+          dx = b.x - a.x; dy = b.y - a.y;
+          dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < LINE_DIST) continue;
+          l = dx / dist; k = dy / dist;
+          ctx.beginPath();
+          ctx.moveTo(a.x + LINE_PAD * l, a.y + LINE_PAD * k);
+          ctx.lineTo(b.x - LINE_PAD * l, b.y - LINE_PAD * k);
+          ctx.stroke();
+        }
+      }
+      // 纵线
+      for (c2 = 0; c2 < cols; c2++) {
+        for (r2 = 0; r2 < rows - 1; r2++) {
+          a = nodes[r2 * cols + c2];
+          b = nodes[(r2 + 1) * cols + c2];
+          dx = b.x - a.x; dy = b.y - a.y;
+          dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < LINE_DIST) continue;
+          l = dx / dist; k = dy / dist;
+          ctx.beginPath();
+          ctx.moveTo(a.x + LINE_PAD * l, a.y + LINE_PAD * k);
+          ctx.lineTo(b.x - LINE_PAD * l, b.y - LINE_PAD * k);
+          ctx.stroke();
+        }
+      }
+
+      // 圆点（arc）
+      for (i = 0; i < nodes.length; i++) {
+        n = nodes[i];
+        var size = DOT_BASE, alpha = DOT_ALPHA;
+        if (!isNaN(mouse.lx)) {
+          dx = n.x - mouse.lx; dy = n.y - mouse.ly;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          var p = Math.max(0, 1 - d / MOUSE_RADIUS);
+          size = DOT_BASE + DOT_GROW * p;
+          alpha = DOT_ALPHA + 0.4 * p;
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgb(' + DOT_RGB + ')';
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    var io = new IntersectionObserver(function (es) {
+      visible = es[0].isIntersecting;
+      if (visible) lastFrame = 0;
+    }, { threshold: 0 });
+    io.observe(canvas);
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(step);
+  })();
+
+  // ========================================================
+  // 层 4：鼠标跟随的横向极光波浪
+  // 形态：
+  //   - 横向 ribbon（WAVE_W = 460px 宽，WAVE_H = 90px 高）
+  //   - 上下边缘多频正弦波动（与背景极光一致的磁力线模型）
+  //   - 振幅从中心向两端衰减（中间最"亮"，符合"鼠标为能量源"的直觉）
+  //   - 内部 6 条垂直 ray 条纹（粒子流）
+  //   - 水平方向水平渐变：两端淡、中间亮
+  // ========================================================
+  (function () {
+    var canvas = document.getElementById('pb-mouse-blob');
+    if (!canvas) return;
+    var ctx = setCanvas(canvas);
+
+    var LIGHT_FOLLOW = 0.22;   // 稍紧跟，让波浪有明显拖尾
+    var WAVE_W = 700;          // 横向总宽
+    var WAVE_H = 200;           // 纵向厚度（中心 ±45）
+    var SEGS = 500;            // 路径分段（高 → 边缘平滑）
+    var RAYS = 9;              // 内部 ray 条纹数
+
+    var HUE = 215, SAT = 75, LIGHT = 38, ALPHA = 0.02;
+    var SEED = 1.5;
+
+    var mx = W / 2, my = H / 2;
+    var t0 = performance.now();
+
+    function drawWave(cx, cy, sec) {
+      var halfW = WAVE_W / 2;
+      var halfH = WAVE_H / 2;
+
+      // === 1. 横向波形 ribbon 主体 ===
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW, cy);
+
+      // 顶边：左 → 右
+      for (var i = 0; i <= SEGS; i++) {
+        var t = i / SEGS;
+        var x = cx - halfW + WAVE_W * t;
+        // 3 频率正弦叠加（与背景极光同样的磁力线模型）
+        var wave = Math.sin(sec * 0.6 + t * 7 + SEED) * 14
+                 + Math.sin(sec * 0.9 + t * 13 + SEED * 1.3) * 6
+                 + Math.sin(sec * 0.4 + t * 3.5 + SEED * 0.7) * 10;
+        // 振幅从中心向两端衰减（sin 包络）
+        var ampMod = Math.sin(t * Math.PI);
+        var y = cy - halfH + wave * ampMod;
+        ctx.lineTo(x, y);
+      }
+      // 底边：右 → 左（反向绘制，闭合路径）
+      for (var j = SEGS; j >= 0; j--) {
+        var t2 = j / SEGS;
+        var x2 = cx - halfW + WAVE_W * t2;
+        var wave2 = Math.sin(sec * 0.6 + t2 * 7 + SEED) * 14
+                  + Math.sin(sec * 0.9 + t2 * 13 + SEED * 1.3) * 6
+                  + Math.sin(sec * 0.4 + t2 * 3.5 + SEED * 0.7) * 10;
+        var ampMod2 = Math.sin(t2 * Math.PI);
+        var y2 = cy + halfH + wave2 * ampMod2;
+        ctx.lineTo(x2, y2);
+      }
+      ctx.closePath();
+
+      // 水平渐变：两端透明 → 中间亮（柔光晕）
+      var g = ctx.createLinearGradient(cx - halfW, 0, cx + halfW, 0);
+      g.addColorStop(0,    'hsla(' + HUE + ',' + SAT + '%,' + LIGHT + '%,0)');
+      g.addColorStop(0.18, 'hsla(' + HUE + ',' + SAT + '%,' + LIGHT + '%,' + (ALPHA * 0.45) + ')');
+      g.addColorStop(0.5,  'hsla(' + HUE + ',' + SAT + '%,' + (LIGHT + 8) + '%,' + ALPHA + ')');
+      g.addColorStop(0.82, 'hsla(' + HUE + ',' + SAT + '%,' + LIGHT + '%,' + (ALPHA * 0.45) + ')');
+      g.addColorStop(1,    'hsla(' + HUE + ',' + SAT + '%,' + LIGHT + '%,0)');
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      // === 2. 内部 ray 条纹（垂直亮线，模拟粒子流） ===
+      for (var r = 0; r < RAYS; r++) {
+        var tr = (r + 0.5) / RAYS;
+        var rx = cx - halfW + WAVE_W * tr;
+        var ampMod3 = Math.sin(tr * Math.PI);
+        if (ampMod3 < 0.15) continue;  // 跳过两端不可见区
+
+        // ray 内部：上下两端透明、中间亮
+        var rg = ctx.createLinearGradient(0, cy - halfH, 0, cy + halfH);
+        rg.addColorStop(0,    'hsla(' + HUE + ',' + SAT + '%,85%,0)');
+        rg.addColorStop(0.5,  'hsla(' + HUE + ',' + SAT + '%,85%,' + (ALPHA * 0.40 * ampMod3) + ')');
+        rg.addColorStop(1,    'hsla(' + HUE + ',' + SAT + '%,85%,0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(rx - 0.5, cy - halfH, 1, WAVE_H);
+      }
+    }
+
+    var lastFrame = 0, interval = 1000 / 30;
+    var waveAngle = 0;  // 波浪当前旋转角（朝向鼠标移动方向）
+    function loop(now) {
+      requestAnimationFrame(loop);
+      if (!visible) return;
+      if (now - lastFrame < interval) return;
+      lastFrame = now - ((now - lastFrame) % interval);
+
+      ctx.clearRect(0, 0, W, H);
+      if (!isNaN(mouse.x)) {
+        mx += (mouse.x - mx) * LIGHT_FOLLOW;
+        my += (mouse.y - my) * LIGHT_FOLLOW;
+      }
+
+      // === 波浪方向 = 鼠标移动方向 ===
+      // mouseVel 是平滑后的速度向量
+      var speed = Math.sqrt(mouseVel.x * mouseVel.x + mouseVel.y * mouseVel.y);
+      // 速度太慢时回到水平（默认朝向）
+      var targetAngle = speed < 0.5 ? 0 : Math.atan2(mouseVel.y, mouseVel.x);
+      // 平滑角度变化（处理 ±π 环绕）
+      var dAngle = targetAngle - waveAngle;
+      while (dAngle > Math.PI)  dAngle -= 2 * Math.PI;
+      while (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+      waveAngle += dAngle * 0.12;
+
+      // 旋转整个波浪（绕鼠标中心旋转）
+      ctx.save();
+      ctx.translate(mx, my);
+      ctx.rotate(waveAngle);
+      drawWave(0, 0, (now - t0) / 1000);
+      ctx.restore();
+    }
+
+    var io = new IntersectionObserver(function (es) {
+      visible = es[0].isIntersecting;
+      if (visible) lastFrame = 0;
+    }, { threshold: 0 });
+    io.observe(canvas);
+    window.addEventListener('resize', function () { setCanvas(canvas); });
+    requestAnimationFrame(loop);
+  })();
+
+  // ===== 全局鼠标 =====
+  function onMove(e) {
+    var t = e.touches ? e.touches[0] : e;
+    if (isNaN(mouse.lx)) { mouse.lx = t.clientX; mouse.ly = t.clientY; }
+
+    // 速度：本次位置 - 上一次位置（用原始坐标，不受 lerp 影响）
+    if (prevMouse.has) {
+      var dx = t.clientX - prevMouse.x;
+      var dy = t.clientY - prevMouse.y;
+      // 平滑：new = 0.75 * old + 0.25 * raw
+      mouseVel.x = mouseVel.x * 0.75 + dx * 0.25;
+      mouseVel.y = mouseVel.y * 0.75 + dy * 0.25;
+    }
+    prevMouse.x = t.clientX;
+    prevMouse.y = t.clientY;
+    prevMouse.has = true;
+
+    mouse.x = t.clientX;
+    mouse.y = t.clientY;
+    // 用于网格的更平滑的鼠标位置
+    mouse.lx += (mouse.x - mouse.lx) * 0.30;
+    mouse.ly += (mouse.y - mouse.ly) * 0.30;
+  }
+  function onLeave() {
+    // 鼠标离开 → 速度衰减为 0（极光扰动自然消失）
+    mouseVel.x *= 0.85;
+    mouseVel.y *= 0.85;
+  }
+  window.addEventListener('mousemove', onMove, { passive: true });
+  window.addEventListener('touchmove', onMove, { passive: true });
+  window.addEventListener('mouseleave', onLeave);
+  window.addEventListener('touchend', onLeave);
+})();
+</script>
