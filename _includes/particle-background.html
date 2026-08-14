@@ -47,11 +47,21 @@
   }
 
   /* 整层高斯模糊 —— GPU 加速，给极光/光斑做真正的"光晕" */
+  /* ----------------------------------------------------------------
+   *   blur(28px)  极光幕帘模糊            ↑ 越晕（光带融合） / ↓ 越锐（线条清晰）
+   * ---------------------------------------------------------------- */
   .pb-blur { filter: blur(28px); }
   /* 鼠标波浪更小，blur 也小一点 —— 保留形状可读性 */
+  /* ----------------------------------------------------------------
+   *   blur(78px)  鼠标光斑模糊            ↑ 越柔和（水波感）/ ↓ 越有边界感
+   * ---------------------------------------------------------------- */
   #pb-mouse-blob { filter: blur(78px); }
 
-  /* 深色在浅底自然显形 */
+  /* 深色在浅底自然显形：把光斑的深色"乘"进背景的浅色，越乘越暗 */
+  /* ----------------------------------------------------------------
+   *   mix-blend-mode: multiply  深色显形、浅色透明
+   *   改为 screen/exclusion    切换为深色背景下用（光斑变亮）
+   * ---------------------------------------------------------------- */
   .pb-blend { mix-blend-mode: multiply; }
 
   /* 顶部 mask 渐隐 */
@@ -111,14 +121,34 @@
     //   alpha   不透明度（0~1）
     //   drift   水平漂移速度 + 方向（正=向右, 负=向左, 越大越快）
     //   phase   相位偏移（不同幕帘用不同 phase 避免同步"呼吸"）
+    //   topY    幕帘顶部 y 比例（0~1, 越小越靠上）
+    //   baseY   幕帘底部 y 比例（0~1, 越大越靠下）
+    //   hJitter 每秒最大高度抖动幅度（0=不抖，越大幕帘上下脉动越剧烈）
     // ----------------------------------------------------------------
-    // 5 条幕帘（不同 x、色相、相位、漂移方向）
+    // 高度随机范围：[topY0..topY1] × [baseY0..baseY1]，启动时为每条幕帘抽签一次
+    // ----------------------------------------------------------------
+    //   topY0/topY1  顶部 y 区间    ↑ 数字越大 顶部越靠下（幕帘越短）
+    //   baseY0/baseY1 底部 y 区间    ↑ 数字越大 底部越靠下（幕帘越长）
+    //   hJitter      高度脉动幅度   ↑ 幕帘上下涌动 / ↓ 静止
+    // ----------------------------------------------------------------
+    var TOP_Y_RANGE = [0.02, 0.10];   // 顶部 y 区间（占屏幕比例）
+    var BASE_Y_RANGE = [0.45, 0.70];  // 底部 y 区间（占屏幕比例）
+    var H_JITTER = 0.02;             // 每秒最大高度抖动幅度
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    // 5 条幕帘（不同 x、色相、相位、漂移方向、高度）
     var curtains = [
-      { x: 0.12, hue: 195, sat: 70, light: 55, alpha: 0.55, drift: 0.018, phase: 0.0 },
-      { x: 0.30, hue: 200, sat: 65, light: 52, alpha: 0.65, drift: -0.022, phase: 1.7 },
-      { x: 0.50, hue: 205, sat: 70, light: 50, alpha: 0.70, drift: 0.025, phase: 3.4 },
-      { x: 0.70, hue: 210, sat: 65, light: 52, alpha: 0.60, drift: -0.020, phase: 5.1 },
-      { x: 0.88, hue: 200, sat: 70, light: 55, alpha: 0.50, drift: 0.023, phase: 6.8 }
+      { x: 0.12, hue: 195, sat: 70, light: 55, alpha: 0.55, drift: 0.018, phase: 0.0,
+        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
+      { x: 0.30, hue: 200, sat: 65, light: 52, alpha: 0.65, drift: -0.022, phase: 1.7,
+        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
+      { x: 0.50, hue: 205, sat: 70, light: 50, alpha: 0.70, drift: 0.025, phase: 3.4,
+        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
+      { x: 0.70, hue: 210, sat: 65, light: 52, alpha: 0.60, drift: -0.020, phase: 5.1,
+        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
+      { x: 0.88, hue: 200, sat: 70, light: 55, alpha: 0.50, drift: 0.023, phase: 6.8,
+        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) }
     ];
 
     // 绘制单条幕帘
@@ -223,9 +253,15 @@
 
       ctx.clearRect(0, 0, W, H);
       var sec = lastFrame / 1000;
-      // 绘制所有幕帘 —— 底部约在 H*0.55，顶部约在 H*0.05（占上 50% 屏幕）
+      // 绘制所有幕帘 —— 每条幕帘用各自的高度配置（启动时随机 + 每秒微抖）
       for (var i = 0; i < curtains.length; i++) {
-        drawCurtain(curtains[i], sec, 0.55, 0.05);
+        var c = curtains[i];
+        // 微抖动：让幕帘上下缓慢涌动（更像真实极光）
+        var topJ  = c.topY  + Math.sin(sec * 0.35 + c.phase) * H_JITTER;
+        var baseJ = c.baseY + Math.sin(sec * 0.25 + c.phase * 1.4) * H_JITTER;
+        // 防止 baseY 跑到 topY 上面（路径会反向渲染成空）
+        if (baseJ <= topJ + 0.05) baseJ = topJ + 0.05;
+        drawCurtain(c, sec, baseJ, topJ);
       }
     }
 
@@ -496,7 +532,10 @@
       }
 
       // === 波浪方向 = 鼠标移动方向 ===
-      // mouseVel 是平滑后的速度向量
+      // ----------------------------------------------------------------
+      //   <0.5     速度阈值（低于则波浪回到水平）
+      //   *0.12    角度平滑系数              ↑ 紧跟旋转 / ↓ 缓慢对齐
+      // ----------------------------------------------------------------
       var speed = Math.sqrt(mouseVel.x * mouseVel.x + mouseVel.y * mouseVel.y);
       // 速度太慢时回到水平（默认朝向）
       var targetAngle = speed < 0.5 ? 0 : Math.atan2(mouseVel.y, mouseVel.x);
@@ -524,6 +563,13 @@
   })();
 
   // ===== 全局鼠标 =====
+  // ----------------------------------------------------------------
+  // 鼠标速度平滑（在 onMove 中）：new = 0.75 * old + 0.25 * raw
+  // ----------------------------------------------------------------
+  //   0.75/0.25    速度平滑系数            ↑ 更平滑但反应迟钝 / ↓ 抖动
+  //   *0.30        网格用鼠标 lerp 系数    ↑ 紧跟 / ↓ 拖尾
+  //   *0.85        mouseleave 时速度衰减   ↑ 衰减慢（扰动持久）/ ↓ 立刻消失
+  // ----------------------------------------------------------------
   function onMove(e) {
     var t = e.touches ? e.touches[0] : e;
     if (isNaN(mouse.lx)) { mouse.lx = t.clientX; mouse.ly = t.clientY; }
@@ -542,12 +588,16 @@
 
     mouse.x = t.clientX;
     mouse.y = t.clientY;
-    // 用于网格的更平滑的鼠标位置
+    // 用于网格的更平滑的鼠标位置（0.30 lerp）
+    //   ↑ 数值越大，鼠标越紧贴真实位置（少拖尾但更灵敏）
+    //   ↓ 数值越小，网格反应越像"缓动"，鼠标经过后余韵更长
     mouse.lx += (mouse.x - mouse.lx) * 0.30;
     mouse.ly += (mouse.y - mouse.ly) * 0.30;
   }
   function onLeave() {
     // 鼠标离开 → 速度衰减为 0（极光扰动自然消失）
+    //   *0.85  每帧乘 0.85，约 20 帧回到静止
+    //   ↑ 衰减慢（扰动拖尾长，像风散去） / ↓ 立刻归零
     mouseVel.x *= 0.85;
     mouseVel.y *= 0.85;
   }
