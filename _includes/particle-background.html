@@ -125,31 +125,45 @@
     //   baseY   幕帘底部 y 比例（0~1, 越大越靠下）
     //   hJitter 每秒最大高度抖动幅度（0=不抖，越大幕帘上下脉动越剧烈）
     // ----------------------------------------------------------------
-    // 高度随机范围：[topY0..topY1] × [baseY0..baseY1]，启动时为每条幕帘抽签一次
+    // 高度随机范围：[topY0..topY1] × [baseY0..baseY1]
     // ----------------------------------------------------------------
-    //   topY0/topY1  顶部 y 区间    ↑ 数字越大 顶部越靠下（幕帘越短）
+    //   topY0/topY1   顶部 y 区间    ↑ 数字越大 顶部越靠下（幕帘越短）
     //   baseY0/baseY1 底部 y 区间    ↑ 数字越大 底部越靠下（幕帘越长）
-    //   hJitter      高度脉动幅度   ↑ 幕帘上下涌动 / ↓ 静止
+    //   hJitter       高度微脉动幅度 ↑ 幕帘上下涌动 / ↓ 静止
+    //   retargetMin/Max 重新抽签目标高度的间隔（秒）
+    //                   ↑ 间隔越长 变化越慢越"波澜不惊" / ↓ 越快越"躁动"
+    //   lerpK         当前值逼近目标的系数
+    //                   ↑ 越大逼近越快（变化突兀） / ↓ 越小越柔（过渡丝滑）
     // ----------------------------------------------------------------
     var TOP_Y_RANGE = [0.02, 0.10];   // 顶部 y 区间（占屏幕比例）
     var BASE_Y_RANGE = [0.45, 0.70];  // 底部 y 区间（占屏幕比例）
-    var H_JITTER = 0.02;             // 每秒最大高度抖动幅度
+    var H_JITTER = 0.02;              // 每秒最大高度抖动幅度
+    var RETARGET_MIN = 3.0;           // 重新抽签目标高度的最短间隔（秒）
+    var RETARGET_MAX = 8.0;           // 重新抽签目标高度的最长间隔（秒）
+    var LERP_K = 0.012;               // 每帧 lerp 逼近目标的系数（30fps 下约 1.5 秒到位）
 
     function rand(a, b) { return a + Math.random() * (b - a); }
 
     // 5 条幕帘（不同 x、色相、相位、漂移方向、高度）
+    //   topY/baseY    当前高度（每帧 lerp 逼近目标）
+    //   topT/baseT    目标高度（每隔 RETARGET_MIN..MAX 秒重新随机抽）
+    //   nextRetarget  下次重新抽签的秒数
     var curtains = [
-      { x: 0.12, hue: 195, sat: 70, light: 55, alpha: 0.55, drift: 0.018, phase: 0.0,
-        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
-      { x: 0.30, hue: 200, sat: 65, light: 52, alpha: 0.65, drift: -0.022, phase: 1.7,
-        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
-      { x: 0.50, hue: 205, sat: 70, light: 50, alpha: 0.70, drift: 0.025, phase: 3.4,
-        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
-      { x: 0.70, hue: 210, sat: 65, light: 52, alpha: 0.60, drift: -0.020, phase: 5.1,
-        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) },
-      { x: 0.88, hue: 200, sat: 70, light: 55, alpha: 0.50, drift: 0.023, phase: 6.8,
-        topY: rand(TOP_Y_RANGE[0], TOP_Y_RANGE[1]), baseY: rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]) }
+      { x: 0.12, hue: 195, sat: 70, light: 55, alpha: 0.55, drift: 0.018, phase: 0.0 },
+      { x: 0.30, hue: 200, sat: 65, light: 52, alpha: 0.65, drift: -0.022, phase: 1.7 },
+      { x: 0.50, hue: 205, sat: 70, light: 50, alpha: 0.70, drift: 0.025, phase: 3.4 },
+      { x: 0.70, hue: 210, sat: 65, light: 52, alpha: 0.60, drift: -0.020, phase: 5.1 },
+      { x: 0.88, hue: 200, sat: 70, light: 55, alpha: 0.50, drift: 0.023, phase: 6.8 }
     ];
+    // 启动时为每条幕帘初始化高度（current = target，第一次就已是最终值）
+    for (var k = 0; k < curtains.length; k++) {
+      var ck = curtains[k];
+      ck.topY  = rand(TOP_Y_RANGE[0],  TOP_Y_RANGE[1]);
+      ck.baseY = rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]);
+      ck.topT  = ck.topY;
+      ck.baseT = ck.baseY;
+      ck.nextRetarget = rand(RETARGET_MIN, RETARGET_MAX);
+    }
 
     // 绘制单条幕帘
     // c: curtain 配置
@@ -253,10 +267,22 @@
 
       ctx.clearRect(0, 0, W, H);
       var sec = lastFrame / 1000;
-      // 绘制所有幕帘 —— 每条幕帘用各自的高度配置（启动时随机 + 每秒微抖）
+      // 绘制所有幕帘 —— 每条幕帘的高度在 [TOP_Y_RANGE] × [BASE_Y_RANGE] 内动态随机
       for (var i = 0; i < curtains.length; i++) {
         var c = curtains[i];
-        // 微抖动：让幕帘上下缓慢涌动（更像真实极光）
+
+        // 1) 到时间就重新抽一个新目标高度（每隔 RETARGET_MIN..MAX 秒）
+        if (sec >= c.nextRetarget) {
+          c.topT  = rand(TOP_Y_RANGE[0],  TOP_Y_RANGE[1]);
+          c.baseT = rand(BASE_Y_RANGE[0], BASE_Y_RANGE[1]);
+          c.nextRetarget = sec + rand(RETARGET_MIN, RETARGET_MAX);
+        }
+
+        // 2) 当前高度向目标高度逼近（lerp，每帧一次，避免突变）
+        c.topY  += (c.topT  - c.topY)  * LERP_K;
+        c.baseY += (c.baseT - c.baseY) * LERP_K;
+
+        // 3) 微抖动：让幕帘上下缓慢涌动（更像真实极光）
         var topJ  = c.topY  + Math.sin(sec * 0.35 + c.phase) * H_JITTER;
         var baseJ = c.baseY + Math.sin(sec * 0.25 + c.phase * 1.4) * H_JITTER;
         // 防止 baseY 跑到 topY 上面（路径会反向渲染成空）
